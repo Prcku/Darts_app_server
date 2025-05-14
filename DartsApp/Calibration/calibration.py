@@ -614,9 +614,7 @@ class MultiCameraCalibrator:
         cv2.destroyAllWindows()
 
     def run_calibration_pipeline(self):
-        """
-        Spustenie celého kalibračného procesu
-        """
+
         print("\n=== KALIBRAČNÁ PIPELINE ===")
         
         # 1. Zachytávanie obrázkov pre jednotlivé kamery
@@ -627,7 +625,7 @@ class MultiCameraCalibrator:
         print("\n=== KROK 2: Kalibrácia jednotlivých kamier ===")
         # calibration_results = self.calibrate_all_cameras()
 
-        # ked uz kalibraciu mas zrobenu
+        # ked uz kalibraciu mas zrobenu tak zavolas uz vytvorene yaml subory
 
         calibration_files = [
             "./calibration1000/calib_data/left_calibration.yaml",
@@ -659,22 +657,6 @@ class MultiCameraCalibrator:
                 if stereo_data is not None:
                     pair_key = f"{self.camera_names[ref_camera_idx]}_to_{self.camera_names[i]}"
                     stereo_results[pair_key] = stereo_data
-        # 
-        # # 5. Test rektifikácie
-        # print("\n=== KROK 5: Test stereo rektifikácie ===")
-        # for i in range(len(self.camera_indices)):
-        #     if i != ref_camera_idx:
-        #         pair_key = f"{self.camera_names[ref_camera_idx]}_to_{self.camera_names[i]}"
-        #         if pair_key in stereo_results:
-        #             self.test_stereo_rectification(ref_camera_idx, i, stereo_results[pair_key])
-        # 
-        # # 6. Vytvorenie disparity mapy a 3D rekonštrukcie
-        # print("\n=== KROK 6: Test depth mapy ===")
-        # for i in range(len(self.camera_indices)):
-        #     if i != ref_camera_idx:
-        #         pair_key = f"{self.camera_names[ref_camera_idx]}_to_{self.camera_names[i]}"
-        #         if pair_key in stereo_results:
-        #             self.test_depth_map(ref_camera_idx, i, stereo_results[pair_key])
         
         print("\n=== KALIBRÁCIA DOKONČENÁ ===")
         print(f"Všetky kalibračné údaje boli uložené do: {self.calib_data_dir}")

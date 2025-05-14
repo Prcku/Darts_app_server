@@ -1,0 +1,32 @@
+# 🎯 Dart Detection System
+
+Aplikácia na detekciu hodov šípok pomocou viacerých kamier, spracovania obrazu a triangulácie v reálnom čase. Projekt využíva knižnice ako OpenCV a Streamlit, na spoľahlivú detekciu hrotov šípok a výpočet bodov v hre pre dvoch hráčov.
+
+---
+
+## 🔧 Funkcionalita
+
+- Detekcia hrotov šípok pomocou rozdielov voči referenčnému obrazu.
+- Triangulácia polohy šípky z viacerých kamier.
+- Automatické bodovanie podľa reálneho terča.
+- Zobrazenie terča s vizualizáciou dopadov.
+- Interaktívne rozhranie pre dvoch hráčov cez webové UI (Streamlit).
+- Správa kola, bustov a výhry so spätnou úpravou bodov.
+
+---
+
+## 📦 Požiadavky
+
+- Python 3.8+
+- streamlit
+- opencv-python
+- numpy
+- Pillow
+- pyyaml
+
+---
+
+##  Spustenie
+
+Hlavna čas programu sa nachádza v súbore dartApp.py ktorý sa spúšta **streamlit run .\DartApp.py** .
+V prípade, že kalibračné súbory nebudu funkčné teda s kamerami sa pohlo alebo sa zmenil ich uhol. Je taktiež potrebné vykonať kalibráciu systému kde najprv naskenujeme fotky a nasledne spravime kalibráciu. Súbor sa spúšta  **python ./DartsApp/Calibration/main.py (Názov adresára kde budeme naše data ukladať)**
