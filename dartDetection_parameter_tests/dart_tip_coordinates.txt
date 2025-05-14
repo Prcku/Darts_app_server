@@ -1,0 +1,3 @@
+Hrot sipky X: 673
+Hrot sipky Y: 450
+Pouzita metoda: close_5x5

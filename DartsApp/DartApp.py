@@ -3,23 +3,12 @@ import cv2
 import numpy as np
 import time
 import copy
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from matplotlib.patches import Arc, Wedge
-from matplotlib.path import Path
-import io
 from PIL import Image
 import copy
-import math
 import yaml
 
-from DartDetection import dartDetection, capture_reference_images, releaseCameras, load_calibration
+from DartDetection import dartDetection, capture_reference_images, load_calibration
 from triangulation import triangulate_shots
-
-
-
-# je potrebne spravit nejaku zmenu na detekciu pretoze niekedy to random detekuje na zaciatku kola
-# dalsi problem je ze ked mas 2 sipky a typek prejebe ak ked vlastne je to chybou systemu tak po naslednej uprave hodnoty aj tak nasledu dalsi hrac takze to je zle
 
 # Konštanty
 STARTING_SCORE = 501
@@ -29,11 +18,10 @@ camera_files = [
     "./Calibration/calibration1000/calib_data/middle_calibration.yaml",
     "./Calibration/calibration1000/calib_data/right_calibration.yaml"
 ]
-cams = [3, 1, 2]
+cams = [3, 1, 2] # toto su indexy kamier ktore si definujeme podla svojho systemu
 frame_size = (1000, 1000)
 target_radius_mm = 225
 center_3d = np.array([19.10, -24.91, 414.20])  # Centrum terča v 3D priestore
-
 
 # --- Výpočet mierky ---
 center_px = np.array([502, 500])
@@ -42,9 +30,7 @@ pixel_radius = np.linalg.norm(edge_px - center_px)
 scale = pixel_radius / target_radius_mm  # px per mm
 
 # Načítanie terča
-original_target_image = cv2.imread("../Dartboard.png")
-# original_target_image = cv2.imread("./camera1.png")
-
+original_target_image = cv2.imread("./Dartboard1000.png")
 
 # Konštanty pre polomery jednotlivých oblastí v mm
 BULLSEYE_RADIUS = 7
@@ -54,10 +40,10 @@ TRIPLE_OUTER_RADIUS = 107
 DOUBLE_INNER_RADIUS = 160
 DOUBLE_OUTER_RADIUS = 170
 
-# Segment values (clockwise from top)
+# Segment hodnoty
 segment_values = [6, 10, 15, 2, 17, 3, 19, 7, 16, 8,
                      11, 14, 9, 12, 5, 20, 1, 18, 4, 13]
-segment_size = 18  # degrees per segment
+segment_size = 18 
 
 @st.cache_resource(show_spinner=False)
 def init_cameras():
@@ -96,35 +82,7 @@ with open(stereo_files[0]) as f:
 R_left = np.array(left_stereo['rotation_matrix'])
 T_left = np.array(left_stereo['translation_vector'])
 
-def improved_project_point_with_y(point_3d, center_3d, center_px, scale):
-    relative = np.array(point_3d) - center_3d
-    dx, dy, dz = relative
-
-    # Kompenzácia výšky – ovplyvní perspektívu
-    dz_adjusted = dz + dy * 0.15  # 0.15 je kalibračný faktor
-
-    radial_distance = np.sqrt(dx**2 + dz_adjusted**2)
-
-    # Korekčný faktor podľa vzdialenosti
-    if radial_distance > 0:
-        if radial_distance < 50:
-            correction_factor = 1.05
-        elif radial_distance < 100:
-            correction_factor = 1.02
-        elif radial_distance < 150:
-            correction_factor = 0.98
-        else:
-            correction_factor = 0.95
-        dx *= correction_factor
-        dz_adjusted *= correction_factor*1.1
-
-    x_img = center_px[0] + dx * scale
-    y_img = center_px[1] - dz_adjusted * scale
-
-    return int(round(x_img)), int(round(y_img))
-
 def project_point(point_3d, center_3d, center_px, scale, y_gain=0.0045):
-    
     relative = np.array(point_3d) - center_3d
 
     dx, dy, dz = relative
@@ -133,45 +91,8 @@ def project_point(point_3d, center_3d, center_px, scale, y_gain=0.0045):
     dz += dy * y_gain * abs(dy) 
 
     x_img = center_px[0] + relative[0] * scale
-    y_img = center_px[1] - relative[2] * scale *1.12
+    y_img = center_px[1] - relative[2] * scale * 1.12
     return int(round(x_img)), int(round(y_img))
-
-def project_point_camera_model(point_3d, camera_matrix, dist_coeffs, rvec, tvec):
-    """
-    Projekcia 3D bodu do 2D pomocou plnej kamery s využitím kalibrácie.
-    
-    Args:
-        point_3d: [x, y, z] 3D bod v globálnych súradniciach
-        camera_matrix: Kalibračná matica kamery (K)
-        dist_coeffs: Distortion koeficienty (D)
-        rvec: Rotácia kamery (Rodrigues)
-        tvec: Translácia kamery (voči svetovému systému)
-        
-    Returns:
-        (x, y): bod v 2D obraze
-    """
-    point_3d_np = np.array([point_3d], dtype=np.float32)  # (1, 3)
-    image_points, _ = cv2.projectPoints(point_3d_np, rvec, tvec, camera_matrix, dist_coeffs)
-    x, y = image_points[0][0]
-    return int(round(x)), int(round(y))
-
-def draw_shot_positions_projected(image, positions_list, calibration_data, rvec, tvec):
-    """
-    Vykreslí šípky pomocou kamerovej projekcie (cv2.projectPoints).
-    """
-    result_image = copy.deepcopy(image)
-    colors = [(0, 255, 0), (255, 0, 255), (255, 255, 0)]
-
-    camera_matrix = calibration_data[0]
-    dist_coeffs = calibration_data[1]
-
-    for i, position in enumerate(positions_list):
-        if position is not None:
-            x, y = project_point_camera_model(position, camera_matrix, dist_coeffs, rvec, tvec)
-            cv2.circle(result_image, (x, y), 6, colors[i % len(colors)], -1)
-            cv2.circle(result_image, (x, y), 9, (255, 255, 255), 2)
-
-    return result_image
 
 def draw_shot_positions(image, positions_list, center_3d, center_px, scale):
     # Vytvorenie kópie obrázku, aby sme nemodifikovali originál
@@ -187,60 +108,6 @@ def draw_shot_positions(image, positions_list, center_3d, center_px, scale):
             cv2.circle(result_image, (x, y), 5, colors[0], -1)
             cv2.circle(result_image, (x, y), 7, (255, 255, 255), 2)
     
-    return result_image
-
-def correct_distance_by_y(distance, y_position):
-    if distance > 0:
-        if y_position > 0:
-            # Horná polovica (nad stredom)
-            return (
-            -0.0000005992 * distance**3
-            - 0.0004997 * distance**2
-            + 0.9656 * distance
-            - 0.4132
-        )
-        else:
-            # Dolná polovica (pod stredom)
-            return -0.0009108 * distance**2 + 1.1385 * distance - 9.6469
-    else:
-        return distance
-
-def draw_shot_positions_polar(image, positions_list, center_3d, center_px, scale):
-    """
-    Vykreslí pozície šípok na terč pomocou polárnych súradníc (vzdialenosť, uhol).
-    Args:
-        image: obraz terča
-        positions_list: zoznam 3D súradníc šípok
-        center_3d: 3D súradnice stredu terča
-        center_px: súradnice stredu terča na obrázku (v pixeloch)
-        scale: mierka (px/mm)
-    """
-    result_image = copy.deepcopy(image)
-    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # červ., zel., modr.
-
-    for i, position in enumerate(positions_list):
-        if position is None:
-            continue
-
-        relative = np.array(position) - center_3d
-        dx = relative[0]
-        dz = relative[2]
-
-        # výpočet vzdialenosti a uhla (v rovine X-Z)
-        distance_mm = np.linalg.norm([dx, dz])
-        angle_rad = math.atan2(-dz, dx)
-        angle_deg = (np.degrees(angle_rad) + 360) % 360
-
-        # premietnutie do 2D poľa
-        x = center_px[0] + math.cos(angle_rad) * distance_mm * scale
-        y = center_px[1] + math.sin(angle_rad) * distance_mm * scale
-
-        cv2.circle(result_image, (int(x), int(y)), 6, colors[i % len(colors)], -1)
-        cv2.putText(result_image, f"{int(distance_mm)}mm", (int(x)+5, int(y)-10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(result_image, f"{angle_deg:.1f}°", (int(x)+5, int(y)+10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-
     return result_image
 
 def edit_distance(distance):
@@ -276,133 +143,8 @@ def edit_distance(distance):
     upravena_hodnota = distance * faktor
     return upravena_hodnota
 
-def improved_scoring_calculation(point_3d, center_3d, segment_size=20):
-    """
-    More accurate scoring calculation with better handling of 
-    distances and angles.
-    
-    Args:
-        point_3d: 3D coordinates of the dart
-        center_3d: 3D coordinates of the dartboard center
-        segment_values: List of segment values around the board
-        segment_size: Angular size of each segment in degrees
-        
-    Returns:
-        int: Score for the throw
-    """
-    
-    # Calculate relative position from center
-    relative_vector = np.array(point_3d) - center_3d
-    
-    # Extract X and Z components (Y is height, not relevant for scoring)
-    dx, _, dz = relative_vector
-    
-    # Calculate distance in XZ plane
-    distance = np.sqrt(dx**2 + dz**2)
-    
-    # Apply distance correction based on empirical calibration
-    # This is critical for accurate scoring
-    corrected_distance = adjust_distance(distance)
-    
-    # Calculate angle in degrees (clockwise from right)
-    angle_rad = np.arctan2(-dz, dx)  # Negative dz because Z points inward
-    angle_deg = (np.degrees(angle_rad) + 360) % 360
-    
-    # Apply angle offset for segment alignment
-    angle_offset = 9  # Empirical offset for segment alignment
-    adjusted_angle = (angle_deg + angle_offset) % 360
-    
-    # Determine segment index
-    segment_index = int(adjusted_angle // segment_size)
-    segment_value = segment_values[segment_index % len(segment_values)]
-    
-    # Determine score based on distance
-    if corrected_distance <= BULLSEYE_RADIUS:
-        score = 50  # Bullseye
-    elif corrected_distance <= OUTER_BULL_RADIUS:
-        score = 25  # Outer bull
-    elif corrected_distance <= TRIPLE_INNER_RADIUS:
-        score = segment_value
-    elif corrected_distance <= TRIPLE_OUTER_RADIUS:
-        score = segment_value * 3  # Triple
-    elif corrected_distance <= DOUBLE_INNER_RADIUS:
-        score = segment_value
-    elif corrected_distance <= DOUBLE_OUTER_RADIUS:
-        score = segment_value * 2  # Double
-    else:
-        score = 0  # Outside the board
-    
-    # Log detailed scoring information for debugging
-    print(f"Angle: {angle_deg:.1f}°, Distance: {distance:.1f}mm, " +
-          f"Corrected: {corrected_distance:.1f}mm, Segment: {segment_value}, Score: {score}")
-          
-    return score
-
-def calculate_correction_map(target_image, center_px, scale, target_radius_mm):
-    """
-    Creates a correction map for more accurate dart position projection.
-    
-    This function computes a grid of correction factors across the dartboard
-    that can be used to adjust the projected positions for better accuracy.
-    
-    Args:
-        target_image: Dartboard image
-        center_px: Center of dartboard in image (pixels)
-        scale: Base scale factor (px/mm)
-        target_radius_mm: Radius of dartboard in mm
-        
-    Returns:
-        Dictionary of correction factors indexed by grid positions
-    """
-    # Create an empty correction map
-    correction_map = {}
-    
-    # Grid resolution (higher = more accurate but slower)
-    grid_size = 20  # mm
-    
-    # Generate grid points across the dartboard
-    max_radius = target_radius_mm + 20  # Slightly beyond board edge
-    
-    for x_mm in range(-max_radius, max_radius + 1, grid_size):
-        for y_mm in range(-max_radius, max_radius + 1, grid_size):
-            # Calculate distance from center
-            distance = np.sqrt(x_mm**2 + y_mm**2)
-            
-            # Only consider points within or slightly beyond the board
-            if distance <= max_radius:
-                # Apply correction based on distance and angle
-                angle_rad = np.arctan2(y_mm, x_mm)
-                angle_deg = (np.degrees(angle_rad) + 360) % 360
-                
-                # Base correction is stronger near the edges
-                base_correction = 1.0 - (distance / max_radius) * 0.15
-                
-                # Small variations based on angle to account for asymmetric distortion
-                angle_factor = 1.0 + 0.03 * np.sin(angle_rad * 2)
-                
-                # Combined correction factor
-                correction = base_correction * angle_factor
-                
-                # Store in map with grid coordinates as key
-                grid_x = int(x_mm / grid_size)
-                grid_y = int(y_mm / grid_size)
-                correction_map[(grid_x, grid_y)] = correction
-    
-    return correction_map
-
 def apply_correction_map(point_3d, center_3d, correction_map, grid_size=20):
-    """
-    Applies the correction map to a 3D point for more accurate projection.
-    
-    Args:
-        point_3d: 3D coordinates of the dart
-        center_3d: 3D coordinates of dartboard center
-        correction_map: Correction factors indexed by grid positions
-        grid_size: Size of grid cells in mm
-        
-    Returns:
-        Corrected 3D point
-    """
+
     # Calculate relative position
     relative = np.array(point_3d) - center_3d
     
@@ -433,44 +175,8 @@ def apply_correction_map(point_3d, center_3d, correction_map, grid_size=20):
         center_3d[2] + corrected_z
     ])
     
-    return corrected_point
+    return corrected_point  
 
-def adjust_distance(distance):
-    """
-    Improved distance adjustment function with more refined calibration.
-    
-    This function applies a non-linear correction to the measured distance
-    to account for systematic measurement errors and perspective distortion.
-    
-    Args:
-        distance: Raw distance measurement in mm
-        
-    Returns:
-        float: Corrected distance in mm
-    """
-    # More granular correction factors based on distance ranges
-    if distance <= 10:
-        return distance * 1.02  # Slight expansion very close to center
-    elif distance <= 20:
-        return distance * 1.0
-    elif distance <= 50:
-        return distance * 0.98
-    elif distance <= 80:
-        return distance * 0.97
-    elif distance <= 100:
-        return distance * 0.96
-    elif distance <= 120:
-        return distance * 0.94
-    elif distance <= 140:
-        return distance * 0.93
-    elif distance <= 160:
-        return distance * 0.92
-    elif distance <= 180:
-        return distance * 0.90
-    else:
-        return distance * 0.88  # Stronger correction for outer areas       
-
-# Funkcia pre bodovanie (zjednodušená - v reálnej aplikácii by ste mali komplexnejší algoritmus)
 def adjust_scoring_calculation(point_3d, center_3d):
     """
     Upravená funkcia pre výpočet skóre zohľadňujúca eliptickú deformáciu.
@@ -492,16 +198,14 @@ def adjust_scoring_calculation(point_3d, center_3d):
     angle_deg = (np.degrees(angle_rad) + 360) % 360
     angle_offset = 9
 
-    #[ 10 15 2, 17 3, 19, 7,  16, 8,  11, 14, 9,  12, 5,  20, 1,  18, 4,  13  6]
-    #[9 27 35 65 81 99 117 135 153 171 189 207 225 243 261 279 297 315 333 351 ]
+    #[ 10 15 2, 17 3, 19, 7,  16, 8,  11, 14, 9,  12, 5,  20, 1,  18, 4,  13  6] segment
+    #[9 27 35 65 81 99 117 135 153 171 189 207 225 243 261 279 297 315 333 351 ] uhly
     segment_index = int((angle_deg + angle_offset) % 360 // segment_size)
     segment_value = segment_values[segment_index % 20]
 
     print(f"vzdialenost pred {distance}")
 
     distance2 = edit_distance(distance)
-
-    print(f"vzdialenost {distance2}")
 
     if distance2 <= BULLSEYE_RADIUS:
         score = 50
@@ -518,44 +222,13 @@ def adjust_scoring_calculation(point_3d, center_3d):
     else:
         score = 0
 
-    print(f"Uhol: {angle_deg}° vzdialenost: {distance}, skore: {score}")
+    print(f"Uhol: {angle_deg}° vzdialenost: {distance2}, skore: {score}")
     return score
-
-def update_dart_detection_status():
-    """Aktualizuje stav detekcie šípok pre vizuálny indikátor"""
-    current_time = time.time()
-    
-    # Základné nastavenie - detekcia nie je možná (červená)
-    status = "Vytiahni šipky a stlač tlačidlo"
-    color = "#FF5252"  # červená
-    
-    # Kontrola, či je detekcia povolená a či nie sme v osobitnom stave
-    if (not st.session_state.ready_to_review and
-        not st.session_state.ready_for_next_player and
-        not st.session_state.game_over and
-        not st.session_state.potential_bust and
-        not st.session_state.potential_win):
-        
-        # Kontrola, či vypršal cooldown čas
-        time_remaining = st.session_state.last_detection_time - current_time
-        
-        if time_remaining <= 0:
-            # Detekcia je aktívna (zelená)
-            status = "Pripravené"
-            color = "#4CAF50"  # zelená
-        else:
-            # V cooldown perióde (žltá)
-            seconds_remaining = int(time_remaining) + 1
-            status = f"Čakajte {seconds_remaining}s"
-            color = "#FFC107"  # žltá
-    
-    return status, color
 
 def detect_dart(cameras, calibration_data):
     """Funkcia na detekciu šípky a výpočet skóre"""
     try:
-        camera_matrix, dist_coeffs, _, mapx, mapy = calibration_data[1] 
-        # st.session_state.current_image = cv2.remap(original_target_image, mapx, mapy, cv2.INTER_LINEAR)
+        # st.session_state.current_image = cv2.remap(original_target_image, mapx, mapy, cv2.INTER_LINEAR) toto je pre mapovanie
 
         # Kontrola, či už nie je maximum hodov
         if st.session_state.shots_taken >= MAX_SHOTS_PER_ROUND:
@@ -563,7 +236,6 @@ def detect_dart(cameras, calibration_data):
         
         # Detekcia šípky
         ref_images = capture_reference_images(cameras, calibration_data)
-        cv2.imshow(f"Kamera {0}",ref_images[0]) 
 
         time.sleep(0.5)
         dartPosition = dartDetection(cameras, calibration_data, cams, ref_images)
@@ -574,7 +246,7 @@ def detect_dart(cameras, calibration_data):
         if triangulated is None:
             return False
         
-        # Aplikuj korekciu
+        # Aplikuj korekciu 
         #print(triangulated)
         #corrected_3d = apply_correction_map(triangulated, center_3d, st.session_state.correction_map)
         #print(corrected_3d)
@@ -613,17 +285,10 @@ def detect_dart(cameras, calibration_data):
             center_px,
             scale,
         )
-        
-        # st.session_state.current_image = draw_shot_positions_projected(
-        #     st.session_state.current_image,
-        #     st.session_state.dart_positions,
-        #     calibration_data[1],
-        #     R_left,
-        #     T_left
-        # )       
+      
         
         timestamp = int(time.time())
-        cv2.imwrite(f"../DetectedDartsFoto/testing/testing{timestamp}.png", st.session_state.current_image)
+        #cv2.imwrite(f"../DetectedDartsFoto/testing/testing{timestamp}.png", st.session_state.current_image)
         # Predbežne aktualizujeme skóre (môže byť upravené pri review)
         st.session_state[f"{current_player}_score"] = new_score
         
@@ -767,8 +432,6 @@ def main():
         st.session_state.potential_bust = False  # Potenciálne prekročenie (treba ešte potvrdiť)
         st.session_state.potential_win = False   # Potenciálne víťazstvo (treba ešte potvrdiť)
         st.session_state.round_number = 1
-        st.session_state.correction_map = calculate_correction_map(
-        original_target_image, center_px, scale, target_radius_mm)
         
         # Inicializácia premenných pre jednotlivé hody
         for player in [1, 2]:
@@ -835,13 +498,6 @@ def main():
             
     # Herný režim
     else:
-        # Priprava pre robenie funckie na cakanie pri hode sipky aspon 2-3 sekundy
-
-        #status, color = update_dart_detection_status()
-        #<div style="padding: 10px; background-color: {color}; color: white; border-radius: 5px; font-weight: bold;">
-        #            <span style="display: inline-block; width: 10px; height: 10px; background-color: {color}; border-radius: 50%; margin-right: 5px;"></span>
-        #            {status}
-        #        </div>
         st.markdown(
             f"""
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px;">
