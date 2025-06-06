@@ -32,6 +32,16 @@ scale = pixel_radius / target_radius_mm  # px per mm
 # Načítanie terča
 original_target_image = cv2.imread("./Dartboard1000.png")
 
+# Získanie rozmerov obrázka
+#(h, w) = original_target_image.shape[:2]
+#center = (w // 2, h // 2)
+#
+## Vytvorenie transformačnej matice pre rotáciu o 18 stupňov
+#matica = cv2.getRotationMatrix2D(center, 19, 1.0)
+#
+## Aplikovanie rotácie
+#original_target_image = cv2.warpAffine(original_target_image, matica, (w, h))
+#
 # Konštanty pre polomery jednotlivých oblastí v mm
 BULLSEYE_RADIUS = 7
 OUTER_BULL_RADIUS = 17
@@ -41,8 +51,8 @@ DOUBLE_INNER_RADIUS = 160
 DOUBLE_OUTER_RADIUS = 170
 
 # Segment hodnoty
-segment_values = [6, 10, 15, 2, 17, 3, 19, 7, 16, 8,
-                     11, 14, 9, 12, 5, 20, 1, 18, 4, 13]
+segment_values = [ 10, 15, 2, 17, 3, 19, 7, 16, 8,
+                     11, 14, 9, 12, 5, 20, 1, 18, 4, 13, 6]
 segment_size = 18 
 
 @st.cache_resource(show_spinner=False)
@@ -82,8 +92,19 @@ with open(stereo_files[0]) as f:
 R_left = np.array(left_stereo['rotation_matrix'])
 T_left = np.array(left_stereo['translation_vector'])
 
-def project_point(point_3d, center_3d, center_px, scale, y_gain=0.0045):
+def project_point(point_3d, center_3d, center_px, scale, y_gain=0.0045, angle_deg=18):
+    # Výpočet relatívnej pozície
     relative = np.array(point_3d) - center_3d
+
+    # Rotácia okolo osi Y (ak angle_deg != 0)
+    if angle_deg != 0:
+        angle_rad = np.deg2rad(angle_deg)
+        Ry = np.array([
+            [ np.cos(angle_rad), 0, np.sin(angle_rad)],
+            [ 0,                1, 0               ],
+            [-np.sin(angle_rad), 0, np.cos(angle_rad)]
+        ])
+        relative = Ry @ relative
 
     dx, dy, dz = relative
 
@@ -91,7 +112,7 @@ def project_point(point_3d, center_3d, center_px, scale, y_gain=0.0045):
     dz += dy * y_gain * abs(dy) 
 
     x_img = center_px[0] + relative[0] * scale
-    y_img = center_px[1] - relative[2] * scale * 1.12
+    y_img = center_px[1] - relative[2] * scale * 1.13
     return int(round(x_img)), int(round(y_img))
 
 def draw_shot_positions(image, positions_list, center_3d, center_px, scale):
@@ -112,29 +133,29 @@ def draw_shot_positions(image, positions_list, center_3d, center_px, scale):
 
 def edit_distance(distance):
     if distance >= 200:
-        faktor = 0.86
-    elif distance >= 190:
-        faktor = 0.87
-    elif distance >= 190:
         faktor = 0.88
-    elif distance >= 170:
+    elif distance >= 190:
         faktor = 0.89
-    elif distance >= 160:
+    elif distance >= 180:
         faktor = 0.90
-    elif distance >= 150:
+    elif distance >= 170:
         faktor = 0.91
-    elif distance >= 140:
+    elif distance >= 160:
         faktor = 0.92
-    elif distance >= 130:
+    elif distance >= 150:
         faktor = 0.93
-    elif distance >= 120: 
+    elif distance >= 140:
         faktor = 0.94
-    elif distance >= 110:
+    elif distance >= 130:
         faktor = 0.95
-    elif distance >= 100:
+    elif distance >= 120: 
         faktor = 0.96
-    elif distance >= 90:
+    elif distance >= 110:
+        faktor = 0.97
+    elif distance >= 100:
         faktor = 0.98
+    elif distance >= 90:
+        faktor = 0.99
     elif distance <= 80:
         faktor = 1
     else:
@@ -196,7 +217,7 @@ def adjust_scoring_calculation(point_3d, center_3d):
     # Rovinu berieme ako X-Z, kde Z ide "do hĺbky"
     angle_rad = np.arctan2(-relative_vector[2], relative_vector[0])
     angle_deg = (np.degrees(angle_rad) + 360) % 360
-    angle_offset = 9
+    angle_offset = 8
 
     #[ 10 15 2, 17 3, 19, 7,  16, 8,  11, 14, 9,  12, 5,  20, 1,  18, 4,  13  6] segment
     #[9 27 35 65 81 99 117 135 153 171 189 207 225 243 261 279 297 315 333 351 ] uhly
@@ -513,7 +534,7 @@ def main():
         
         with col1:
             # Zobrazenie aktuálneho terča so šípkami
-            st.image(st.session_state.current_image, caption="Aktuálny stav terča", width=700)
+            st.image(st.session_state.current_image, caption="Aktuálny stav terča", width=800)
             
             # Tlačidlo na návrat do menu
             if not st.session_state.game_over:
@@ -627,11 +648,11 @@ def main():
                 # Styling for larger, more prominent score display
                 st.markdown(
                     f"""
-                    <div style="text-align: center; margin: 20px 0;">
-                        <div style="font-size: 90px; font-weight: bold; color: #2ca02c;">
+                    <div style="text-align: center; ">
+                        <div style="font-size: 130px; font-weight: bold; color: #2ca02c;">
                             {st.session_state.round_scores[-1]}
                         </div>
-                        <div style="font-size: 30px; color: #666;">Hodil si</div>
+                        <div style="font-size: 35px; color: #666;">Hodil si</div>
                     </div>
                     """, 
                     unsafe_allow_html=True

@@ -619,20 +619,19 @@ class MultiCameraCalibrator:
         
         # 1. Zachytávanie obrázkov pre jednotlivé kamery
         print("\n=== KROK 1: Zachytávanie obrázkov pre kalibráciu jednotlivých kamier ===")
-        # self.capture_single_camera_images()
+        self.capture_single_camera_images()
         
         # 2. Kalibrácia jednotlivých kamier
         print("\n=== KROK 2: Kalibrácia jednotlivých kamier ===")
-        # calibration_results = self.calibrate_all_cameras()
+        calibration_results = self.calibrate_all_cameras()
 
         # ked uz kalibraciu mas zrobenu tak zavolas uz vytvorene yaml subory
-
-        calibration_files = [
-            "./calibration1000/calib_data/left_calibration.yaml",
-            "./calibration1000/calib_data/middle_calibration.yaml",
-            "./calibration1000/calib_data/right_calibration.yaml"
-        ]
-        calibration_results = self.load_calibration_data(calibration_files)
+        # calibration_files = [
+        #     "./calibration1000/calib_data/left_calibration.yaml",
+        #     "./calibration1000/calib_data/middle_calibration.yaml",
+        #     "./calibration1000/calib_data/right_calibration.yaml"
+        # ]
+        # calibration_results = self.load_calibration_data(calibration_files)
 
          # 3. Zachytenie stereo obrázkov
         print("\n=== KROK 3: Zachytávanie stereo obrázkov === left-middle")

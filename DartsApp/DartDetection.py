@@ -220,7 +220,7 @@ def dartDetection(cameras,calibration_data, camsID, ref_images, shots=0):
             timestamp = int(time.time())
             ret, final_frame = cameras[0].read()
             final_frame = cv2.remap(final_frame, calibration_data[i][3], calibration_data[i][4], cv2.INTER_LINEAR)
-            cv2.imwrite(f"../DetectedDartsFoto/detection/detectedNEW_dart_camera_{0}_shot_{timestamp}.png", final_frame)
+            #cv2.imwrite(f"../DetectedDartsFoto/detection/detectedNEW_dart_camera_{0}_shot_{timestamp}.png", final_frame)
             for i in range(len(cameras)):
                 print(f"📌 Kamera {i}: Hrot šípky na X={detected_darts[i][0]}, Y={detected_darts[i][1]}")
                 
